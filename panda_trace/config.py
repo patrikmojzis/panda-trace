@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from urllib.parse import quote
 
 
 def _int_env(name: str, default: int) -> int:
@@ -9,6 +10,18 @@ def _int_env(name: str, default: int) -> int:
     if raw is None or raw == "":
         return default
     return int(raw)
+
+
+def _postgres_dsn_from_env() -> str:
+    raw = os.getenv("POSTGRES_DSN")
+    if raw:
+        return raw
+    host = os.getenv("POSTGRES_HOST", "localhost")
+    port = _int_env("POSTGRES_PORT", 5432)
+    database = os.getenv("POSTGRES_DB", "panda_trace")
+    user = quote(os.getenv("POSTGRES_USER", "panda"), safe="")
+    password = quote(os.getenv("POSTGRES_PASSWORD", "panda"), safe="")
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 
 @dataclass(frozen=True)
@@ -78,9 +91,7 @@ class Settings:
             tail_idle_timeout_seconds=_int_env("TAIL_IDLE_TIMEOUT_SECONDS", 300),
             allow_docs_without_auth=os.getenv("ALLOW_DOCS_WITHOUT_AUTH", "true").lower()
             in {"1", "true", "yes"},
-            postgres_dsn=os.getenv(
-                "POSTGRES_DSN", "postgresql://panda:panda@localhost:5432/panda_trace"
-            ),
+            postgres_dsn=_postgres_dsn_from_env(),
             clickhouse_host=os.getenv("CLICKHOUSE_HOST", "localhost"),
             clickhouse_port=_int_env("CLICKHOUSE_PORT", 8123),
             clickhouse_database=os.getenv("CLICKHOUSE_DATABASE", "panda_trace"),
