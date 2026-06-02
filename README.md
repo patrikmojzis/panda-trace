@@ -30,7 +30,6 @@ Docker API port knobs:
 PANDA_TRACE_API_PORT=8000              # uvicorn port inside the container
 PANDA_TRACE_API_PUBLISH_HOST=127.0.0.1 # keep loopback when nginx is in front
 PANDA_TRACE_API_PUBLISH_PORT=8000      # host port nginx proxies to
-PANDA_TRACE_SERVICE_PUBLISH_HOST=127.0.0.1 # keep databases off the public network
 PUBLIC_BASE_URL=https://trace.example.com
 ```
 
@@ -58,7 +57,7 @@ docker compose up --build
 
 This starts the API, Postgres, ClickHouse, Redis, and MinIO. Postgres and ClickHouse schemas are loaded from `migrations/`.
 
-For a VPS with nginx in front, set `PANDA_TRACE_API_PUBLISH_HOST=127.0.0.1` and point nginx at `http://127.0.0.1:$PANDA_TRACE_API_PUBLISH_PORT`.
+For a VPS with nginx in front, set `PANDA_TRACE_API_PUBLISH_HOST=127.0.0.1` and point nginx at `http://127.0.0.1:$PANDA_TRACE_API_PUBLISH_PORT`. Only the API is published to the host; Postgres, ClickHouse, Redis, and MinIO stay internal to the Docker network.
 
 Run the persistent smoke check:
 

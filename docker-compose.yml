@@ -11,7 +11,6 @@ services:
       PANDA_TRACE_API_PORT: ${PANDA_TRACE_API_PORT:-8000}
       PANDA_TRACE_API_PUBLISH_HOST: ${PANDA_TRACE_API_PUBLISH_HOST:-127.0.0.1}
       PANDA_TRACE_API_PUBLISH_PORT: ${PANDA_TRACE_API_PUBLISH_PORT:-8000}
-      PANDA_TRACE_SERVICE_PUBLISH_HOST: ${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}
       RATE_LIMIT_BACKEND: redis
       TAIL_BACKEND: redis
       POSTGRES_HOST: postgres
@@ -46,8 +45,6 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-panda_trace}
       POSTGRES_USER: ${POSTGRES_USER:-panda}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-panda}
-    ports:
-      - "${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./migrations/postgres:/docker-entrypoint-initdb.d:ro
@@ -63,9 +60,6 @@ services:
       CLICKHOUSE_DB: ${CLICKHOUSE_DATABASE:-panda_trace}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-panda}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-panda}
-    ports:
-      - "${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}:8123:8123"
-      - "${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}:9009:9000"
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./migrations/clickhouse:/docker-entrypoint-initdb.d:ro
@@ -77,8 +71,6 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}:6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -91,9 +83,6 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-panda}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-panda-secret}
-    ports:
-      - "${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}:9000:9000"
-      - "${PANDA_TRACE_SERVICE_PUBLISH_HOST:-127.0.0.1}:9001:9001"
     volumes:
       - minio_data:/data
     healthcheck:
