@@ -1,0 +1,25 @@
+# Panda Trace
+
+> Agent-first structured logs API for ingesting, searching, tailing, exporting, and auditing logs across multiple orgs, projects, sources, and agents.
+
+Important notes:
+- Use `Authorization: Bearer <api_key>` for every protected endpoint.
+- Create the first org with `POST /v1/orgs`; the response returns the first owner/admin key secret once.
+- In production, `POST /v1/orgs` requires `X-Bootstrap-Token` when `BOOTSTRAP_TOKEN` is configured.
+- Agents are users. API keys belong to agents and are scoped by org, project, source, and action.
+- Panda Trace does not expose raw database queries. Use the documented search request body.
+- Canonical OpenAPI: {{PUBLIC_BASE_URL}}/openapi.json
+
+## Core Docs
+
+- [Quickstart]({{PUBLIC_BASE_URL}}/docs/quickstart.md): Bootstrap an org and ingest/search the first log.
+- [API Reference]({{PUBLIC_BASE_URL}}/docs/api-reference.md): Endpoint curl examples, scopes, and response examples.
+- [Authentication]({{PUBLIC_BASE_URL}}/docs/authentication.md): API key format, scopes, expiry, revocation, and IP allowlists.
+- [Log Ingestion]({{PUBLIC_BASE_URL}}/docs/log-ingestion.md): Single and batch log writes.
+- [Search]({{PUBLIC_BASE_URL}}/docs/search.md): Safe bounded search request format.
+- [Tailing]({{PUBLIC_BASE_URL}}/docs/tailing.md): Server-sent event stream.
+- [Export]({{PUBLIC_BASE_URL}}/docs/export.md): JSON and JSONL exports.
+- [Attachments]({{PUBLIC_BASE_URL}}/docs/attachments.md): Store oversized blobs beside logs.
+- [Errors]({{PUBLIC_BASE_URL}}/docs/errors.md): Stable error envelope and codes.
+- [Limits]({{PUBLIC_BASE_URL}}/docs/limits.md): Payload, query, and abuse-control limits.
+- [Tenancy]({{PUBLIC_BASE_URL}}/docs/tenancy.md): Org, project, source, agent, and key boundaries.
