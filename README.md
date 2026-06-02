@@ -117,11 +117,7 @@ labels:
 Minimal service config:
 
 ```bash
-sudo cp deploy/systemd/panda-trace-collector.env.example /etc/panda-trace-collector.env
-sudo nano /etc/panda-trace-collector.env
-sudo cp deploy/systemd/panda-trace-collector.service /etc/systemd/system/panda-trace-collector.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now panda-trace-collector
+bash deploy/systemd/install-panda-trace-collector.sh
 ```
 
 Use a dedicated API key with `logs:write` scoped to the source IDs on that host.
