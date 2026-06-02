@@ -1,0 +1,17 @@
+[Unit]
+Description=Panda Trace Docker log collector
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/panda-trace
+EnvironmentFile=/etc/panda-trace-collector.env
+ExecStart=/usr/bin/python3 -m panda_trace_collector
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

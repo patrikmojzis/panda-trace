@@ -100,6 +100,32 @@ curl -s http://localhost:8000/v1/logs/log_.../attachments \
   }'
 ```
 
+## Docker Log Collector
+
+Run the collector as a background service on hosts that run app containers. It follows containers labeled with `panda_trace.enabled=true` and posts logs to `/v1/logs/batch`.
+
+Required container labels:
+
+```yaml
+labels:
+  panda_trace.enabled: "true"
+  panda_trace.source_id: "src_..."
+  panda_trace.service: "ortoart-asgi"
+  panda_trace.environment: "prod"
+```
+
+Minimal service config:
+
+```bash
+sudo cp deploy/systemd/panda-trace-collector.env.example /etc/panda-trace-collector.env
+sudo nano /etc/panda-trace-collector.env
+sudo cp deploy/systemd/panda-trace-collector.service /etc/systemd/system/panda-trace-collector.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now panda-trace-collector
+```
+
+Use a dedicated API key with `logs:write` scoped to the source IDs on that host.
+
 ## Tests
 
 ```bash
