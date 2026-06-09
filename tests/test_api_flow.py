@@ -146,6 +146,26 @@ def test_bootstrap_ingest_search_read_export_and_audit() -> None:
     } <= actions
 
 
+def test_batch_validation_error_identifies_invalid_log_index() -> None:
+    client = make_client()
+    key, _, _, _, source_id = bootstrap(client)
+    headers = {"authorization": f"Bearer {key}"}
+
+    result = client.post(
+        "/v1/logs/batch",
+        headers=headers,
+        json={"logs": [{"source_id": source_id, "severity": "info", "message": ""}]},
+    )
+
+    assert result.status_code == 422, result.text
+    details = result.json()["error"]["details"]
+    assert any(
+        detail.get("loc") == ["body", "logs", 0, "message"]
+        and detail.get("type") == "string_too_short"
+        for detail in details
+    )
+
+
 def test_write_only_key_cannot_read() -> None:
     client = make_client()
     admin_key, org_id, agent_id, project_id, source_id = bootstrap(client)

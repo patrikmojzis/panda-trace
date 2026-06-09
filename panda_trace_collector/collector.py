@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import queue
@@ -13,6 +14,10 @@ import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
+
+
+HTTP_ERROR_BODY_LIMIT_BYTES = 64 * 1024
+VALIDATION_SUMMARY_LIMIT = 5
 
 
 KNOWN_LOG_KEYS = {
@@ -67,6 +72,14 @@ class DockerTarget:
     environment: str | None
 
 
+class PandaTraceHTTPError(RuntimeError):
+    def __init__(self, status_code: int, reason: str | None, body_text: str | None) -> None:
+        self.status_code = status_code
+        self.reason = reason
+        self.body_text = body_text
+        super().__init__(f"Panda Trace returned HTTP {status_code}: {reason or 'error'}.")
+
+
 class PandaTraceClient:
     def __init__(self, base_url: str, api_key: str) -> None:
         self._base_url = base_url
@@ -83,9 +96,16 @@ class PandaTraceClient:
                 "Content-Type": "application/json",
             },
         )
-        with urllib.request.urlopen(request, timeout=15) as response:
-            if response.status >= 300:
-                raise RuntimeError(f"Panda Trace returned HTTP {response.status}.")
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                if response.status >= 300:
+                    raise RuntimeError(f"Panda Trace returned HTTP {response.status}.")
+        except urllib.error.HTTPError as exc:
+            raise PandaTraceHTTPError(
+                status_code=exc.code,
+                reason=getattr(exc, "reason", None),
+                body_text=_read_http_error_body(exc),
+            ) from exc
 
 
 def main() -> None:
@@ -181,6 +201,9 @@ def record_from_docker_line(
         return None
 
     timestamp, message_text = _split_docker_timestamp(raw_line)
+    if not message_text.strip():
+        return None
+
     parsed = _parse_json_object(message_text)
     if parsed is None:
         attributes: dict[str, Any] = {}
@@ -213,6 +236,10 @@ def record_from_docker_line(
             "exception": parsed.get("exception"),
             "attributes": attributes,
         }
+
+    message = record.get("message")
+    if not isinstance(message, str) or not message.strip():
+        return None
 
     record["attributes"]["container_id"] = target.id[:12]
     record["attributes"]["container_name"] = target.name
@@ -279,7 +306,7 @@ def _send_loop(
 
         while batch:
             try:
-                client.send_batch(batch)
+                _send_batch_with_422_recovery(client, batch)
                 batch.clear()
                 last_flush = time.monotonic()
             except (OSError, urllib.error.URLError, RuntimeError) as exc:
@@ -287,6 +314,167 @@ def _send_loop(
                 stop.wait(5)
                 if stop.is_set():
                     break
+
+
+def _send_batch_with_422_recovery(client: PandaTraceClient, batch: list[dict[str, Any]]) -> None:
+    pending = list(batch)
+    while pending:
+        try:
+            client.send_batch(pending)
+            return
+        except PandaTraceHTTPError as exc:
+            if exc.status_code != 422:
+                raise
+            details = _validation_details_from_http_error(exc)
+            _log(f"send failed: HTTP 422 validation_error {_safe_validation_summary(details)}")
+            invalid_indices = sorted(_extract_batch_log_indices(details))
+            invalid_indices = [index for index in invalid_indices if 0 <= index < len(pending)]
+            if invalid_indices:
+                invalid_index_set = set(invalid_indices)
+                for index in invalid_indices:
+                    _log(
+                        "dropping validation-invalid log "
+                        f"index={index} {_safe_log_fingerprint(pending[index])}"
+                    )
+                pending = [
+                    item
+                    for index, item in enumerate(pending)
+                    if index not in invalid_index_set
+                ]
+                continue
+            _send_singletons_dropping_validation_errors(client, pending)
+            return
+
+
+def _send_singletons_dropping_validation_errors(
+    client: PandaTraceClient,
+    batch: list[dict[str, Any]],
+) -> None:
+    for item in batch:
+        try:
+            client.send_batch([item])
+        except PandaTraceHTTPError as exc:
+            if exc.status_code != 422:
+                raise
+            details = _validation_details_from_http_error(exc)
+            _log(
+                "dropping validation-invalid log singleton "
+                f"{_safe_log_fingerprint(item)} {_safe_validation_summary(details)}"
+            )
+
+
+def _read_http_error_body(exc: urllib.error.HTTPError) -> str | None:
+    try:
+        raw_body = exc.read(HTTP_ERROR_BODY_LIMIT_BYTES)
+    except Exception:
+        return None
+    if not raw_body:
+        return None
+    return raw_body.decode("utf-8", errors="replace")
+
+
+def _validation_details_from_http_error(exc: PandaTraceHTTPError) -> list[dict[str, Any]]:
+    if not exc.body_text:
+        return []
+    try:
+        body = json.loads(exc.body_text)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(body, dict):
+        return []
+
+    details: Any = None
+    error = body.get("error")
+    if isinstance(error, dict):
+        details = error.get("details")
+    if details is None:
+        details = body.get("detail")
+
+    if isinstance(details, list):
+        return [detail for detail in details if isinstance(detail, dict)]
+    if isinstance(details, dict):
+        return [details]
+    return []
+
+
+def _safe_validation_summary(details: list[dict[str, Any]]) -> str:
+    if not details:
+        return "details=unavailable"
+
+    parts = []
+    for detail in details[:VALIDATION_SUMMARY_LIMIT]:
+        parts.append(
+            "loc="
+            f"{_safe_loc(detail.get('loc'))} "
+            f"type={_safe_log_value(detail.get('type'))} "
+            f"msg={_safe_log_value(detail.get('msg'))}"
+        )
+    if len(details) > VALIDATION_SUMMARY_LIMIT:
+        parts.append(f"... {len(details) - VALIDATION_SUMMARY_LIMIT} more")
+    return "; ".join(parts)
+
+
+def _extract_batch_log_indices(details: list[dict[str, Any]]) -> set[int]:
+    indices: set[int] = set()
+    for detail in details:
+        loc = _loc_items(detail.get("loc"))
+        for index, item in enumerate(loc[:-1]):
+            if item != "logs":
+                continue
+            log_index = _int_like(loc[index + 1])
+            if log_index is not None:
+                indices.add(log_index)
+    return indices
+
+
+def _loc_items(loc: Any) -> list[Any]:
+    if isinstance(loc, (list, tuple)):
+        return list(loc)
+    if isinstance(loc, str):
+        normalized = loc.replace("[", ".").replace("]", "")
+        return [part for part in normalized.split(".") if part]
+    return [loc]
+
+
+def _int_like(value: Any) -> int | None:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdecimal():
+        return int(value)
+    return None
+
+
+def _safe_loc(loc: Any) -> str:
+    return ".".join(_safe_log_value(item) for item in _loc_items(loc))
+
+
+def _safe_log_fingerprint(item: dict[str, Any]) -> str:
+    message_text = _fingerprint_text(item.get("message"))
+    return (
+        f"source_id_sha256={_hash_text(_fingerprint_text(item.get('source_id')))} "
+        f"service_sha256={_hash_text(_fingerprint_text(item.get('service')))} "
+        f"severity={_safe_log_value(item.get('severity'))} "
+        f"message_len={len(message_text)} "
+        f"message_sha256={_hash_text(message_text)}"
+    )
+
+
+def _fingerprint_text(value: Any) -> str:
+    if isinstance(value, str):
+        return value
+    return json.dumps(value, default=str, separators=(",", ":"))
+
+
+def _hash_text(value: str) -> str:
+    return hashlib.sha256(value.encode("utf-8", errors="replace")).hexdigest()[:12]
+
+
+def _safe_log_value(value: Any, *, limit: int = 120) -> str:
+    text = "" if value is None else str(value)
+    cleaned = " ".join(text.split())
+    if len(cleaned) > limit:
+        return cleaned[: limit - 1] + "…"
+    return cleaned
 
 
 def _split_docker_timestamp(line: str) -> tuple[str | None, str]:
