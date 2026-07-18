@@ -23,6 +23,5 @@ def test_clickhouse_diagnostic_logs_have_bounded_retention() -> None:
     config_path = Path(__file__).parents[1] / "deploy" / "clickhouse" / "panda-trace.xml"
     config = ElementTree.parse(config_path).getroot()
 
-    assert config.findtext("background_pool_size") == "2"
     for table in ("query_log", "trace_log", "text_log", "metric_log"):
         assert config.findtext(f"{table}/ttl") == "event_date + INTERVAL 7 DAY DELETE"

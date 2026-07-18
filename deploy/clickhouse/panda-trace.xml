@@ -1,7 +1,4 @@
 <clickhouse>
-  <!-- Keep merge pressure proportional to the small self-hosted deployment. -->
-  <background_pool_size>2</background_pool_size>
-
   <!-- Bound ClickHouse's own diagnostic tables independently of Panda log retention. -->
   <query_log>
     <database>system</database>
