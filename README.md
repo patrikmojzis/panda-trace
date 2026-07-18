@@ -55,7 +55,7 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts the API, Postgres, ClickHouse, Redis, and MinIO. Postgres and ClickHouse schemas are loaded from `migrations/`.
+This starts the API, Postgres, ClickHouse, Redis, and MinIO. Postgres and ClickHouse schemas are loaded from `migrations/`. The bundled ClickHouse config also bounds internal diagnostic-log retention and background merge concurrency for small self-hosted servers.
 
 For a VPS with nginx in front, set `PANDA_TRACE_API_PUBLISH_HOST=127.0.0.1` and point nginx at `http://127.0.0.1:$PANDA_TRACE_API_PUBLISH_PORT`. Only the API is published to the host; Postgres, ClickHouse, Redis, and MinIO stay internal to the Docker network.
 

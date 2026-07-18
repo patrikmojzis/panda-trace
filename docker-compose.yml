@@ -63,6 +63,7 @@ services:
     volumes:
       - clickhouse_data:/var/lib/clickhouse
       - ./migrations/clickhouse:/docker-entrypoint-initdb.d:ro
+      - ./deploy/clickhouse/panda-trace.xml:/etc/clickhouse-server/config.d/panda-trace.xml:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8123/ping"]
       interval: 5s

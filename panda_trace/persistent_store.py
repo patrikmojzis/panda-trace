@@ -4,8 +4,8 @@ import asyncio
 import json
 import uuid
 from io import BytesIO
+from typing import Any, AsyncIterator, Callable
 from urllib.parse import urlparse
-from typing import Any, AsyncIterator
 
 from panda_trace.access import (
     assert_log_read_allowed,
@@ -55,6 +55,21 @@ from panda_trace.security import (
 from panda_trace.tail import RedisTailAdapter, TailHub
 
 
+def _create_clickhouse_client(
+    settings: Settings,
+    factory: Callable[..., Any],
+) -> Any:
+    """Create a shared sync client without a ClickHouse session lock."""
+    return factory(
+        host=settings.clickhouse_host,
+        port=settings.clickhouse_port,
+        username=settings.clickhouse_user,
+        password=settings.clickhouse_password,
+        database=settings.clickhouse_database,
+        autogenerate_session_id=False,
+    )
+
+
 class PostgresClickHouseStore:
     """Production store backed by Postgres control-plane tables and ClickHouse logs.
 
@@ -85,13 +100,7 @@ class PostgresClickHouseStore:
             max_size=10,
             open=True,
         )
-        self.ch = get_client(
-            host=settings.clickhouse_host,
-            port=settings.clickhouse_port,
-            username=settings.clickhouse_user,
-            password=settings.clickhouse_password,
-            database=settings.clickhouse_database,
-        )
+        self.ch = _create_clickhouse_client(settings, get_client)
         minio_endpoint = urlparse(settings.minio_endpoint)
         if minio_endpoint.scheme:
             endpoint = minio_endpoint.netloc

@@ -1,0 +1,26 @@
+<clickhouse>
+  <!-- Keep merge pressure proportional to the small self-hosted deployment. -->
+  <background_pool_size>2</background_pool_size>
+
+  <!-- Bound ClickHouse's own diagnostic tables independently of Panda log retention. -->
+  <query_log>
+    <database>system</database>
+    <table>query_log</table>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </query_log>
+  <trace_log>
+    <database>system</database>
+    <table>trace_log</table>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </trace_log>
+  <text_log>
+    <database>system</database>
+    <table>text_log</table>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </text_log>
+  <metric_log>
+    <database>system</database>
+    <table>metric_log</table>
+    <ttl>event_date + INTERVAL 7 DAY DELETE</ttl>
+  </metric_log>
+</clickhouse>
